@@ -1,80 +1,57 @@
-from unidecode import unidecode
-import requests
+from __future__ import print_function
+import os.path
+from googleapiclient.discovery import build # pip install google-api-python-client
+from google_auth_oauthlib.flow import InstalledAppFlow # google-auth
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from oauth2client.service_account import ServiceAccountCredentials # pip install oauth2client
 
+SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group']
+GOOGLE_TOCHKAK_TOKEN = 'token.json'
+DELEGATED_USER = 'admin@tochkak.ru'
 
-global JIRA_HOST
-
-JIRA_HOST = 'http://10.0.0.7:8080/'
-JIRA_CREDENTIALS = 'vigerin:wantt0Know'
-
-
-position_dict = {
-    'developer': 'Разработчик',
-    'vis': 'Оператор ВИС',
-    'trader': 'Менеджер по продажам',
-    'qa': 'Тестировщик',
-    'scrum': 'SCRUM-мастер',
-    'bill': 'Бухгалтер',
-    'backend': 'Backend разработчик',
-    'frontend': 'Frontend разработчик',
-    'writer': 'Технический писатель',
-    'manager': 'Менеджер продуктов',
-    'sysadmin': 'Системный администратор'
-}
-
-jira_groups_dict = {
-    'developer': [
-        'confluence-users', 'kinoplan_onboarding', 'stash-users'
-    ],
-    'backend': [
-        'confluence-users', 'kinoplan_onboarding', 'stash-users'
-    ],
-    'frontend': [
-        'confluence-users', 'kinoplan_onboarding', 'stash-users'
-    ],
-}
-
-mail_groups  = {
-    'vis': [
-        'noc@dcp24.ru'
-    ]
-}
-
-class Employee:
-    def __init__(self, name, surname, mail, position):
-        self.name = name
-        self.latin_name = unidecode(name)
-        self.surname = surname
-        self.latin_surname = unidecode(surname)
-        self.mail = mail
-        self.position = position
-
-class Jira:
-    def check_user_exist(self, mail):
-        api_call = 'rest/api/2/user/search'
-        headers = {'Content-Type': 'application/json'}
-        params = {
-            'username': '%s' % mail,
-            'maxResults': 1
-        }
-        get_user_list = requests.get(url=JIRA_HOST + api_call, headers=headers, params=params)
-        print(get_user_list.headers)
-        print(get_user_list.text)
-
-
+def get_service(api_name, api_version, scopes, key_file_location):
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(key_file_location, scopes)
+    delegated_credentials = credentials.create_delegated(DELEGATED_USER)
+    service = build(api_name, api_version, credentials=delegated_credentials)
+    return service
+#
 
 
 def main():
-    new_employee = Employee('Эдуард', 'Вигерин', 'tochkak.ru', 'sysadmin')
-    print(new_employee)
-    jira_check = Jira()
-    jira_check.check_user_exist('vigeri@tochkak.ru')
+    service = get_service(
+            api_name='admin',
+            api_version='directory_v1',
+            scopes=SCOPES,
+            key_file_location=GOOGLE_TOCHKAK_TOKEN)
+    # results = service.users().list(domain='tochkak.ru', maxResults=10,
+    #                                orderBy='email').execute()
+    # print(results)
+    user_json = {
+        "languages": "ru",
+        "isMailboxSetup": True,
+        "primaryEmail": 'automate-test@tochkak.ru',
+        "password": 'kinoplan',
+        "name": {
+          "givenName": "Эдуард", # First Name
+          "fullName": "ПолноеИмя", # Full Name
+          "familyName": "Вигерин", # Last Name
+        },
+        "changePasswordAtNextLogin": True
+    }
+
+    group_json = {
+       "email": "automate@tochkak.ru",
+       "name": "Automate Group",
+       "description": "This is the Test automate group."
+        }
+    results = service.groups().list(userKey='vigerin@tochkak.ru').execute()
+    # results = service.groups().insert(body=group_json).execute()
+    # results = service.groups().list(memberKey='user@company.com').execute()
 
 
-
-
-
-
+    print(results)
+    #
 
 
 
