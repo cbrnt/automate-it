@@ -2,22 +2,30 @@ from unidecode import unidecode
 import requests
 import base64
 
-import lists
+import os.path
+from googleapiclient.discovery import build # pip install google-api-python-client
+from google_auth_oauthlib.flow import InstalledAppFlow # google-auth
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from oauth2client.service_account import ServiceAccountCredentials #  pip install oauth2client
 
 
 
-global JIRA_HOST
+SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group']
+GOOGLE_TOCHKAK_TOKEN = 'token.json'
+DELEGATED_USER = 'admin@tochkak.ru'
 
 DEBUG = True
-
+global JIRA_HOST
 JIRA_HOST = 'http://10.0.0.7:8080/'
+
 jira_credentials = 'vigerin:wantt0Know'
 jira_credentials_bytes = jira_credentials.encode('ascii')
 JIRA_CREDENTIALS_BASE64 = base64.b64encode(jira_credentials_bytes).decode('ascii')
 
 
 employee_name = 'Эдуард'
-employee_surname = '               Вигерин'
+employee_surname = 'Вигерин'
 employee_domain = 'tochkak.ru'
 employee_position = 'sysadmin'
 
@@ -31,6 +39,12 @@ mail_groups  = {
 class Google:
     def create(self):
         token = ''
+        def get_service(api_name, api_version, scopes, key_file_location):
+            credentials = ServiceAccountCredentials.from_json_keyfile_name(key_file_location, scopes)
+            delegated_credentials = credentials.create_delegated(DELEGATED_USER)
+            service = build(api_name, api_version, credentials=delegated_credentials)
+            return service
+        #
 
 
 class Jira:
@@ -95,13 +109,39 @@ def main():
     new_employee = Employee(employee_name, employee_surname, employee_domain, employee_position)
     new_jira_user = Jira.create(new_employee)
 
+    service = get_service(
+            api_name='admin',
+            api_version='directory_v1',
+            scopes=SCOPES,
+            key_file_location=GOOGLE_TOCHKAK_TOKEN)
+    # results = service.users().list(domain='tochkak.ru', maxResults=10,
+    #                                orderBy='email').execute()
+    # print(results)
+    user_json = {
+        "languages": "ru",
+        "isMailboxSetup": True,
+        "primaryEmail": 'automate-test@tochkak.ru',
+        "password": 'kinoplan',
+        "name": {
+          "givenName": "Эдуард", # First Name
+          "fullName": "ПолноеИмя", # Full Name
+          "familyName": "Вигерин", # Last Name
+        },
+        "changePasswordAtNextLogin": True
+    }
+
+    group_json = {
+       "email": "automate@tochkak.ru",
+       "name": "Automate Group",
+       "description": "This is the Test automate group."
+        }
+    results = service.groups().list(userKey='vigerin@tochkak.ru').execute()
+    # results = service.groups().insert(body=group_json).execute()
+    # results = service.groups().list(memberKey='user@company.com').execute()
 
 
-
-
-
-
-
+    print(results)
+    #
 
 
 
