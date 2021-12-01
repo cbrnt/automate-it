@@ -8,46 +8,64 @@ from google_auth_oauthlib.flow import InstalledAppFlow # google-auth
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from oauth2client.service_account import ServiceAccountCredentials #  pip install oauth2client
+import dicts
 
 
-
-SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group']
-GOOGLE_TOCHKAK_TOKEN = 'token.json'
-DELEGATED_USER = 'admin@tochkak.ru'
 
 DEBUG = True
-global JIRA_HOST
-JIRA_HOST = 'http://10.0.0.7:8080/'
 
-jira_credentials = 'vigerin:wantt0Know'
-jira_credentials_bytes = jira_credentials.encode('ascii')
-JIRA_CREDENTIALS_BASE64 = base64.b64encode(jira_credentials_bytes).decode('ascii')
-
-
+# todo перепиши на чтобы брались из UI
 employee_name = 'Эдуард'
 employee_surname = 'Вигерин'
 employee_domain = 'tochkak.ru'
 employee_position = 'sysadmin'
+employee_location = 'S2'
+employee_mail_groups = dicts.mail_groups['employee_position']
+employee_jira_groups = dicts.jira_groups_dict['employee_position']
 
-mail_groups  = {
-    'vis': [
-        'noc@dcp24.ru'
-    ]
-}
 
+TOCHKAK_GOOGLE_TOKEN = 'keys/tochkak_token.json'
+TOCHKAK_GOOGLE_DELEGATED_USER = 'admin@tochkak.ru'
+
+DCP24_GOOGLE_TOKEN = 'keys/dcp24_token.json'
+DCP24_GOOGLE_DELEGATED_USER = 'admin@dcp24.ru'
+
+KINOPLAN_GOOGLE_TOKEN = 'keys/kinoplan_token.json'
+KINOPLAN_GOOGLE_DELEGATED_USER = 'admin@kinoplan.ru'
 
 class Google:
-    def create(self):
-        token = ''
-        def get_service(api_name, api_version, scopes, key_file_location):
-            credentials = ServiceAccountCredentials.from_json_keyfile_name(key_file_location, scopes)
-            delegated_credentials = credentials.create_delegated(DELEGATED_USER)
-            service = build(api_name, api_version, credentials=delegated_credentials)
-            return service
-        #
+
+    scopes = ['https://www.googleapis.com/auth/admin.directory.user',
+              'https://www.googleapis.com/auth/admin.directory.group']
+    api_name = 'admin'
+    api_version = 'directory_v1'
+
+    def get_service(key_file_location, delegated_user):
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(key_file_location, Google.scopes)
+        delegated_credentials = credentials.create_delegated(delegated_user)
+        service = build(Google.api_name, Google.api_version, credentials=delegated_credentials)
+        return service
+
+    def create_user(self):
+        print
+
+    def add_to_group(self):
+        print
+
+    def get_mail_groups(self):
+        print
+
+    def get_license_count(self):
+        print
 
 
 class Jira:
+
+    JIRA_HOST = 'http://10.0.0.7:8080/'
+
+    jira_credentials = 'vigerin:wantt0Know'
+    jira_credentials_bytes = jira_credentials.encode('ascii')
+    JIRA_CREDENTIALS_BASE64 = base64.b64encode(jira_credentials_bytes).decode('ascii')
 
     def create(self):
         api_call = 'rest/api/2/user'
@@ -91,6 +109,15 @@ class login:
         return True
 
 
+class Diagrams:
+    def assign_place(self):
+        return True
+
+class Snipeit:
+    def create_user(self):
+        return True
+
+
 class Employee:
     def __init__(self, name, surname, domain, position):
         self.name = name.replace(' ', '')
@@ -101,6 +128,7 @@ class Employee:
         if DEBUG:
             print('Будущая почта сотрудника: ', self.mail)
         self.position = position
+
 
 
 

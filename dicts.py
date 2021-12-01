@@ -24,3 +24,9 @@ jira_groups_dict = {
         'confluence-users', 'kinoplan_onboarding', 'stash-users'
     ],
 }
+
+mail_groups  = {
+    'vis': [
+        'noc@dcp24.ru'
+    ]
+}
