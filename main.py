@@ -82,17 +82,22 @@ class Google:
             return str(e._get_reason()), not_added_in_groups, error
         return added_in_groups
 
-
     # возращает список групп
     @staticmethod
-    def get_groups(service):
-        results = service.groups().list(domain='tochkak.ru').execute()
-        # results = service.groups().insert(body=group_json).execute()
-        # results = service.groups().list(memberKey='user@company.com').execute()
+    def get_groups(domain):
+        token_path = dicts.domain_props[domain]['token']
+        delegated_user = dicts.domain_props[domain]['user']
+        service = Google.get_service(key_file_location=token_path, delegated_user=delegated_user)
+        results = service.groups().list(domain=domain).execute()
         return results
 
-    def get_group_members(self, group):
-        print()
+    @staticmethod
+    def get_group_members(domain, group):
+        token_path = dicts.domain_props[domain]['token']
+        delegated_user = dicts.domain_props[domain]['user']
+        service = Google.get_service(key_file_location=token_path, delegated_user=delegated_user)
+        results = service.members().list(groupKey=group).execute()
+        return results
 
     # возвращает число пользователей
     def get_license_count(self):
@@ -174,9 +179,6 @@ class Employee:
         # todo добавь форматирование кода
         self.pacs_id = employee_pacs_id
 
-
-
-
 def main():
     # Задаем данные сотрудника
     # todo перепиши на чтобы брались из UI
@@ -207,7 +209,7 @@ def main():
     # создаем объект для авторизации
     service = Google.get_service(key_file_location=token_location, delegated_user=delegated_user)
 
-    # создаем пользвоателя Google
+    # создаем пользователя Google
     create_gmail = Google.create_user(employee=employee, service=service)
     if create_gmail is True:
         print('Создана почта %s' % employee.mail)
@@ -227,13 +229,28 @@ def main():
     # new_jira_user = Jira.create(new_employee)
 
     # Выводим список групп и их членов
-
     # todo добавить указание домена
-    groups_list = Google.get_groups(service)
+    for domain in dicts.domain_props.keys():
+        equal_amount = len(str('Домен %s' % domain))
+        print('=' * equal_amount)
+        print('Домен %s' % domain)
+        print('=' * equal_amount)
+        groups_list = Google.get_groups(domain=domain)
+        for group in range(len(groups_list.get('groups'))):
+            print('    ' + groups_list.get('groups')[group].get('email') + ':')
+            # выводим членов группы
+            group_name = groups_list.get('groups')[group].get('email')
+            get_group_member = Google.get_group_members(domain, group_name)
 
-    print('Группы домена tochkak.ru: ')
-    for group in range(len(groups_list.get('groups'))):
-        print(groups_list.get('groups')[group].get('email'))
+            for member in get_group_member.get('members'):
+                if isinstance(member, dict):
+                    print('       -', member['email'])
+
+
+
+
+
+
 
 if __name__ == '__main__':
     main()
