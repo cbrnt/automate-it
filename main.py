@@ -2,13 +2,9 @@ from unidecode import unidecode
 import requests
 import base64
 
-# todo убери лишние импорты
 
-import os.path
 from googleapiclient.discovery import build # pip install google-api-python-client
-from google_auth_oauthlib.flow import InstalledAppFlow # google-auth
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+
 from oauth2client.service_account import ServiceAccountCredentials #  pip install oauth2client
 import dicts
 import string
@@ -88,11 +84,12 @@ class Google:
 
 
     # возращает список групп
-    def get_groups(self):
-        # results = service.groups().list(userKey='vigerin@tochkak.ru').execute()
+    @staticmethod
+    def get_groups(service):
+        results = service.groups().list(domain='tochkak.ru').execute()
         # results = service.groups().insert(body=group_json).execute()
         # results = service.groups().list(memberKey='user@company.com').execute()
-        print
+        return results
 
     def get_group_members(self, group):
         print()
@@ -229,7 +226,14 @@ def main():
     # создаем пользователя в Jira
     # new_jira_user = Jira.create(new_employee)
 
-# для красоты можно выводить 'message': 'Resource Not Found: memberKey' из dict'a mail_groups
+    # Выводим список групп и их членов
+
+    # todo добавить указание домена
+    groups_list = Google.get_groups(service)
+
+    print('Группы домена tochkak.ru: ')
+    for group in range(len(groups_list.get('groups'))):
+        print(groups_list.get('groups')[group].get('email'))
 
 if __name__ == '__main__':
     main()

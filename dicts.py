@@ -25,13 +25,12 @@ jira_groups_dict = {
     ],
 }
 
-mail_groups  = {
+mail_groups = {
     'vis': [
         'noc@dcp24.ru'
     ],
     'sysadmin': [
-        'it@tochkak.ru',
-        'test@tochkak.ru'  # todo убери на релизе
+        'it@tochkak.ru'
     ]
 }
 
