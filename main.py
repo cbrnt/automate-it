@@ -242,9 +242,11 @@ def main():
             group_name = groups_list.get('groups')[group].get('email')
             get_group_member = Google.get_group_members(domain, group_name)
 
-            for member in get_group_member.get('members'):
+            for member in get_group_member.get('members', '1'):
                 if isinstance(member, dict):
-                    print('       -', member['email'])
+                    print('       -', member.get('email'))
+                else:
+                    print('       -' + 'пустая группа')
 
 
 
