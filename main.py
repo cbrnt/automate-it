@@ -11,10 +11,11 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from oauth2client.service_account import ServiceAccountCredentials #  pip install oauth2client
 import dicts
+import string
+import random
 
+DEBUG = False
 
-
-DEBUG = True
 
 class Google:
 
@@ -23,29 +24,68 @@ class Google:
     api_name = 'admin'
     api_version = 'directory_v1'
 
+    @staticmethod
     def get_service(key_file_location, delegated_user):
         credentials = ServiceAccountCredentials.from_json_keyfile_name(key_file_location, Google.scopes)
         delegated_credentials = credentials.create_delegated(delegated_user)
         service = build(Google.api_name, Google.api_version, credentials=delegated_credentials)
         return service
 
-    def create_user(self):
+    @staticmethod
+    def create_user(employee, service):
         user_json = {
             "languages": "ru",
             "isMailboxSetup": True,
-            "primaryEmail": 'automate-test@tochkak.ru',
-            "password": 'kinoplan',
+            "primaryEmail": '%s' % employee.mail,
+            "password": '%s' % employee.password,
             "name": {
-                "givenName": "Эдуард",  # First Name
-                "fullName": "ПолноеИмя",  # Full Name
-                "familyName": "Вигерин",  # Last Name
+                "givenName": "%s" % employee.name,  # First Name
+                "fullName": "%s" % employee.name + ' ' + '%s' % employee.surname,  # Full Name
+                "familyName": "%s" % employee.surname,  # Last Name
             },
-            "changePasswordAtNextLogin": True
+            "changePasswordAtNextLogin": False
         }
-        print
+        try:
+            request_api = service.users().insert(body=user_json).execute()
+            if DEBUG:
+                print(request_api)
+                print(request_api['primaryEmail'])
+        except Exception as e:
+            if DEBUG:
+                print(type(e))
+                print(e._get_reason())
+            if e._get_reason() == 'Entity already exists.':
+                error = 'Почта %s уже существует.' % employee.mail
+                return error
+        return True
 
-    def add_to_group(self):
-        print
+    @staticmethod
+    def add_to_group(employee, service, group):
+        added_in_groups = list()
+        not_added_in_groups = list()
+        if DEBUG:
+            print('Добавляю в группу %s' % group)
+        try:
+            group_json = {
+                "kind": 'admin#directory#member',
+                "email": employee.mail,
+                "role": 'MEMBER'
+            }
+            request_api = service.members().insert(groupKey=group, body=group_json).execute()
+            added_in_groups.append(group)
+            if DEBUG:
+                print(request_api)
+                print(request_api['email'])
+            print('Добавил в группу %s' % group)
+        except Exception as e:
+            if e._get_reason() == 'Member already exists.':
+                error = 'Почта %s' % employee.mail + ' ' + 'уже есть в группе %s' % group
+            else:
+                error = e._get_reason()
+            not_added_in_groups.append(group)
+            return str(e._get_reason()), not_added_in_groups, error
+        return added_in_groups
+
 
     # возращает список групп
     def get_groups(self):
@@ -99,10 +139,6 @@ class Jira:
                 print("Пользователь не создан в Jira")
             return True
 
-class Slack:
-    def create(self, mail):
-        return True
-
 # Physical Access Control System, СКУД
 class PACS:
     def create(self, name, surname, position, card_it):
@@ -123,7 +159,7 @@ class Snipeit:
 
 
 class Employee:
-    def __init__(self, name, surname, domain, position, location, mail_groups, jira_groups):
+    def __init__(self, name, surname, domain, position, location, mail_groups, jira_groups, employee_pacs_id):
         self.name = name.replace(' ', '')
         self.latin_name = unidecode(self.name).lower()
         self.surname = surname.replace(' ', '')
@@ -133,9 +169,13 @@ class Employee:
         self.location = location
         self.mail_groups = mail_groups
         self.jira_groups = jira_groups
+        # k = длина пароля
+        self.password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
         if DEBUG:
             print('Будущая почта сотрудника: ', self.mail)
         self.position = position
+        # todo добавь форматирование кода
+        self.pacs_id = employee_pacs_id
 
 
 
@@ -143,14 +183,14 @@ class Employee:
 def main():
     # Задаем данные сотрудника
     # todo перепиши на чтобы брались из UI
-    employee_name = 'Эдуард'
-    employee_surname = 'Вигерин'
+    employee_name = 'Уатомат'
+    employee_surname = 'ЫТ'
     employee_domain = 'tochkak.ru'
     employee_position = 'sysadmin'
     employee_location = 'S2'
     employee_pacs_id = '12 345678'
-    employee_mail_groups = dicts.mail_groups['employee_position']
-    employee_jira_groups = dicts.jira_groups_dict['employee_position']
+    employee_mail_groups = dicts.mail_groups.get(employee_position)
+    employee_jira_groups = dicts.jira_groups_dict.get(employee_position)
 
     # создаем объект для сотрудника
     employee = Employee(
@@ -160,7 +200,9 @@ def main():
         employee_position,
         employee_location,
         employee_mail_groups,
-        employee_jira_groups)
+        employee_jira_groups,
+        employee_pacs_id
+    )
 
     token_location = dicts.domain_props[employee.domain]['token']
     delegated_user = dicts.domain_props[employee.domain]['user']
@@ -169,11 +211,25 @@ def main():
     service = Google.get_service(key_file_location=token_location, delegated_user=delegated_user)
 
     # создаем пользвоателя Google
+    create_gmail = Google.create_user(employee=employee, service=service)
+    if create_gmail is True:
+        print('Создана почта %s' % employee.mail)
+    else:
+        print('Почта не создана. Ошибка:' + ' ', create_gmail)
+    # добавляем в группу, если есть в словаре mail_groups
+    for group in employee.mail_groups:
+        add_to_group = Google.add_to_group(employee, service, group)
+        if len(add_to_group) == 1 and isinstance(add_to_group[0], list):
+            print('Почта %s' % employee.mail + ' ' + 'добавлена в группы %s' % add_to_group)
+        elif len(add_to_group) > 1 and add_to_group[2]:
+            print('Группа %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[2])
+        elif len(add_to_group) > 1:
+            print('Почта не добавлена в группу %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[0])
 
     # создаем пользователя в Jira
     # new_jira_user = Jira.create(new_employee)
 
-
+# для красоты можно выводить 'message': 'Resource Not Found: memberKey' из dict'a mail_groups
 
 if __name__ == '__main__':
     main()
