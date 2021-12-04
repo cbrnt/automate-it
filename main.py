@@ -100,9 +100,18 @@ class Google:
         return results
 
     # возвращает число пользователей
-    def get_license_count(self):
-        # число должно быть без алиасов
-        print
+    @staticmethod
+    def get_license_count(domain):
+        scopes = ['https://www.googleapis.com/auth/apps.licensing']
+        api_name = 'licensing'
+        api_version = 'v1'
+        token_path = dicts.domain_props[domain]['token']
+        delegated_user = dicts.domain_props[domain]['user']
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(token_path, scopes)
+        delegated_credentials = credentials.create_delegated(delegated_user)
+        service = build(api_name, api_version, credentials=delegated_credentials)
+        results = service.licenseAssignments().listForProduct(productId='Google-Apps', customerId=domain).execute()
+        return len(results.get('items'))
 
 
 class Jira:
@@ -179,6 +188,26 @@ class Employee:
         # todo добавь форматирование кода
         self.pacs_id = employee_pacs_id
 
+def get_all_groups():
+    for domain in dicts.domain_props.keys():
+        equal_amount = len(str('Домен %s' % domain))
+        print('=' * equal_amount)
+        print('Домен %s' % domain)
+        print('=' * equal_amount)
+        groups_list = Google.get_groups(domain=domain)
+        print('Число групп: ', len(groups_list.get('groups')))
+        for group in range(len(groups_list.get('groups'))):
+            print('    ' + groups_list.get('groups')[group].get('email') + ':')
+            # выводим членов группы
+            group_name = groups_list.get('groups')[group].get('email')
+            get_group_member = Google.get_group_members(domain, group_name)
+
+            for member in get_group_member.get('members', '1'):
+                if isinstance(member, dict):
+                    print('       -', member.get('email'))
+                else:
+                    print('       -' + 'пустая группа')
+
 def main():
     # Задаем данные сотрудника
     # todo перепиши на чтобы брались из UI
@@ -207,46 +236,34 @@ def main():
     delegated_user = dicts.domain_props[employee.domain]['user']
 
     # создаем объект для авторизации
-    service = Google.get_service(key_file_location=token_location, delegated_user=delegated_user)
+    # service = Google.get_service(key_file_location=token_location, delegated_user=delegated_user)
+    #
+    # # создаем пользователя Google
+    # create_gmail = Google.create_user(employee=employee, service=service)
+    # if create_gmail is True:
+    #     print('Создана почта %s' % employee.mail)
+    # else:
+    #     print('Почта не создана. Ошибка:' + ' ', create_gmail)
+    # # добавляем в группу, если есть в словаре mail_groups
+    # for group in employee.mail_groups:
+    #     add_to_group = Google.add_to_group(employee, service, group)
+    #     if len(add_to_group) == 1 and isinstance(add_to_group[0], list):
+    #         print('Почта %s' % employee.mail + ' ' + 'добавлена в группы %s' % add_to_group)
+    #     elif len(add_to_group) > 1 and add_to_group[2]:
+    #         print('Группа %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[2])
+    #     elif len(add_to_group) > 1:
+    #         print('Почта не добавлена в группу %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[0])
+    #
+    # # создаем пользователя в Jira
+    # # new_jira_user = Jira.create(new_employee)
+    #
+    # # Выводим список групп и их членов
+    # # get_all_groups()
 
-    # создаем пользователя Google
-    create_gmail = Google.create_user(employee=employee, service=service)
-    if create_gmail is True:
-        print('Создана почта %s' % employee.mail)
-    else:
-        print('Почта не создана. Ошибка:' + ' ', create_gmail)
-    # добавляем в группу, если есть в словаре mail_groups
-    for group in employee.mail_groups:
-        add_to_group = Google.add_to_group(employee, service, group)
-        if len(add_to_group) == 1 and isinstance(add_to_group[0], list):
-            print('Почта %s' % employee.mail + ' ' + 'добавлена в группы %s' % add_to_group)
-        elif len(add_to_group) > 1 and add_to_group[2]:
-            print('Группа %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[2])
-        elif len(add_to_group) > 1:
-            print('Почта не добавлена в группу %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[0])
-
-    # создаем пользователя в Jira
-    # new_jira_user = Jira.create(new_employee)
-
-    # Выводим список групп и их членов
-    # todo добавить указание домена
+    # Запрашиваю количество лицензий
     for domain in dicts.domain_props.keys():
-        equal_amount = len(str('Домен %s' % domain))
-        print('=' * equal_amount)
-        print('Домен %s' % domain)
-        print('=' * equal_amount)
-        groups_list = Google.get_groups(domain=domain)
-        for group in range(len(groups_list.get('groups'))):
-            print('    ' + groups_list.get('groups')[group].get('email') + ':')
-            # выводим членов группы
-            group_name = groups_list.get('groups')[group].get('email')
-            get_group_member = Google.get_group_members(domain, group_name)
-
-            for member in get_group_member.get('members', '1'):
-                if isinstance(member, dict):
-                    print('       -', member.get('email'))
-                else:
-                    print('       -' + 'пустая группа')
+        get_licenses = Google.get_license_count(domain)
+        print('Занятых лицензий на домене %s' % domain + ': ', get_licenses)
 
 
 
