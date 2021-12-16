@@ -150,10 +150,12 @@ class Jira:
                 print("Пользователь не создан в Jira")
             return True
 
+
 # Physical Access Control System, СКУД
 class PACS:
     def create(self, name, surname, position, card_it):
         return True
+
 
 class login:
     def create(self, name, surname, mail, position):
@@ -163,6 +165,7 @@ class login:
 class Diagrams:
     def assign_place(self):
         return True
+
 
 class Snipeit:
     def create_user(self):
@@ -188,6 +191,7 @@ class Employee:
         # todo добавь форматирование кода
         self.pacs_id = employee_pacs_id
 
+
 def get_all_groups():
     for domain in dicts.domain_props.keys():
         equal_amount = len(str('Домен %s' % domain))
@@ -207,6 +211,7 @@ def get_all_groups():
                     print('       -', member.get('email'))
                 else:
                     print('       -' + 'пустая группа')
+
 
 def main():
     # Задаем данные сотрудника
