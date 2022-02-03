@@ -49,7 +49,7 @@ mail_groups = {
 #     }
 # }
 
-domain_props = {
+domain_attributes = {
     'tochkak.ru': {
         'token': 'keys/tochkak_token.json',
         'user': 'admin@tochkak.ru'

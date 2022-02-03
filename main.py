@@ -1,20 +1,36 @@
+from googleapiclient.errors import HttpError
 from unidecode import unidecode
 import requests
 import base64
-
-
-from googleapiclient.discovery import build # pip install google-api-python-client
-
-from oauth2client.service_account import ServiceAccountCredentials #  pip install oauth2client
+from googleapiclient.discovery import build  # pip install google-api-python-client
+from oauth2client.service_account import ServiceAccountCredentials  # pip install oauth2client
 import dicts
 import string
 import random
+import logging
+import argparse
 
 DEBUG = False
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--log', metavar='DEBUG',
+                    dest='loglevel',
+                    help='уровень логирования')
+args = parser.parse_args()
+if args.loglevel:
+    LOGLEVEL = args.loglevel
+else:
+    LOGLEVEL = ''
+# выставляем уровень логирования
+log_file = 'automate-it.log'
+numeric_level = getattr(logging, LOGLEVEL.upper(), None)
+if not isinstance(numeric_level, int):
+    logging.basicConfig(filename='%s' % log_file, level=logging.WARNING)
+else:
+    logging.basicConfig(filename='%s' % log_file, level=numeric_level)
+
 
 class Google:
-
     scopes = ['https://www.googleapis.com/auth/admin.directory.user',
               'https://www.googleapis.com/auth/admin.directory.group']
     api_name = 'admin'
@@ -85,16 +101,16 @@ class Google:
     # возращает список групп
     @staticmethod
     def get_groups(domain):
-        token_path = dicts.domain_props[domain]['token']
-        delegated_user = dicts.domain_props[domain]['user']
+        token_path = dicts.domain_attributes[domain]['token']
+        delegated_user = dicts.domain_attributes[domain]['user']
         service = Google.get_service(key_file_location=token_path, delegated_user=delegated_user)
         results = service.groups().list(domain=domain).execute()
         return results
 
     @staticmethod
     def get_group_members(domain, group):
-        token_path = dicts.domain_props[domain]['token']
-        delegated_user = dicts.domain_props[domain]['user']
+        token_path = dicts.domain_attributes[domain]['token']
+        delegated_user = dicts.domain_attributes[domain]['user']
         service = Google.get_service(key_file_location=token_path, delegated_user=delegated_user)
         results = service.members().list(groupKey=group).execute()
         return results
@@ -105,8 +121,8 @@ class Google:
         scopes = ['https://www.googleapis.com/auth/apps.licensing']
         api_name = 'licensing'
         api_version = 'v1'
-        token_path = dicts.domain_props[domain]['token']
-        delegated_user = dicts.domain_props[domain]['user']
+        token_path = dicts.domain_attributes[domain]['token']
+        delegated_user = dicts.domain_attributes[domain]['user']
         credentials = ServiceAccountCredentials.from_json_keyfile_name(token_path, scopes)
         delegated_credentials = credentials.create_delegated(delegated_user)
         service = build(api_name, api_version, credentials=delegated_credentials)
@@ -114,86 +130,30 @@ class Google:
         return len(results.get('items'))
 
 
-class Jira:
+class GoogleSheets:
+    # If modifying these scopes, delete the file token.json.
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-    jira_host = 'http://10.0.0.7:8080/'
+    # Токен только tochkak.ru, так как лазить буду только туда
+    token_file = 'keys/tochkak_token.json'
 
-    jira_credentials = 'vigerin:wantt0Know'
-    jira_credentials_bytes = jira_credentials.encode('ascii')
-    JIRA_CREDENTIALS_BASE64 = base64.b64encode(jira_credentials_bytes).decode('ascii')
+    # The ID and range of a sample spreadsheet.
 
-    def create(self):
-        api_call = 'rest/api/2/user'
-        headers = {'Content-Type': 'application/json', 'Authorization': 'Basic %s' % Jira.JIRA_CREDENTIALS_BASE64}
-        if DEBUG:
-            print('headers = ', headers)
-        data = {
-            "name": self.latin_surname,
-            "password": '',
-            "emailAddress": self.mail,
-            "displayName": self.surname + ' ' + self.name,
-            "applicationKeys": [
-            "jira-core"
-            ]
-        }
-        if DEBUG:
-            print('Params: ', self.latin_name, self.mail, self.latin_surname,self.surname + ' ' + self.name)
-        create_user_request = requests.post(url=Jira.jira_host + api_call, headers=headers, json=data)
-        if DEBUG:
-            print(create_user_request.status_code)
-            print(create_user_request.headers)
-            print(create_user_request.text)
-        if create_user_request.status_code == 201:
-            if DEBUG:
-                print("Пользователь создан в Jira")
-            else:
-                print("Пользователь не создан в Jira")
-            return True
+    delegated_user = 'admin@tochkak.ru'
 
+    def get_service(self):
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(self.token_file, GoogleSheets.SCOPES)
+        delegated_credentials = credentials.create_delegated(self.delegated_user)
+        try:
+            service = build('sheets', 'v4', credentials=delegated_credentials)
+        except HttpError as err:
+            logging.error('Ошибка при получении доступа к Sheets', err)
+        return service
 
-# Physical Access Control System, СКУД
-class PACS:
-    def create(self, name, surname, position, card_it):
-        return True
-
-
-class login:
-    def create(self, name, surname, mail, position):
-        return True
-
-
-class Diagrams:
-    def assign_place(self):
-        return True
-
-
-class Snipeit:
-    def create_user(self):
-        return True
-
-
-class Employee:
-    def __init__(self, name, surname, domain, position, location, mail_groups, jira_groups, employee_pacs_id):
-        self.name = name.replace(' ', '')
-        self.latin_name = unidecode(self.name).lower()
-        self.surname = surname.replace(' ', '')
-        self.latin_surname = unidecode(self.surname).lower()
-        self.domain = domain
-        self.mail = self.latin_surname + '@' + domain
-        self.location = location
-        self.mail_groups = mail_groups
-        self.jira_groups = jira_groups
-        # k = длина пароля
-        self.password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-        if DEBUG:
-            print('Будущая почта сотрудника: ', self.mail)
-        self.position = position
-        # todo добавь форматирование кода
-        self.pacs_id = employee_pacs_id
 
 
 def get_all_groups():
-    for domain in dicts.domain_props.keys():
+    for domain in dicts.domain_attributes.keys():
         equal_amount = len(str('Домен %s' % domain))
         print('=' * equal_amount)
         print('Домен %s' % domain)
@@ -214,31 +174,30 @@ def get_all_groups():
 
 
 def main():
-    # Задаем данные сотрудника
-    # todo перепиши на чтобы брались из UI
-    employee_name = 'Уатомат'
-    employee_surname = 'ЫТ'
-    employee_domain = 'tochkak.ru'
-    employee_position = 'sysadmin'
-    employee_location = 'S2'
-    employee_pacs_id = '12 345678'
-    employee_mail_groups = dicts.mail_groups.get(employee_position)
-    employee_jira_groups = dicts.jira_groups_dict.get(employee_position)
-
-    # создаем объект для сотрудника
-    employee = Employee(
-        employee_name,
-        employee_surname,
-        employee_domain,
-        employee_position,
-        employee_location,
-        employee_mail_groups,
-        employee_jira_groups,
-        employee_pacs_id
-    )
-
-    token_location = dicts.domain_props[employee.domain]['token']
-    delegated_user = dicts.domain_props[employee.domain]['user']
+    # # Задаем данные сотрудника
+    # employee_name = 'Уатомат'
+    # employee_surname = 'ЫТ'
+    # employee_domain = 'tochkak.ru'
+    # employee_position = 'sysadmin'
+    # employee_location = 'S2'
+    # employee_pacs_id = '12 345678'
+    # employee_mail_groups = dicts.mail_groups.get(employee_position)
+    # employee_jira_groups = dicts.jira_groups_dict.get(employee_position)
+    #
+    # # создаем объект для сотрудника
+    # employee = Employee(
+    #     employee_name,
+    #     employee_surname,
+    #     employee_domain,
+    #     employee_position,
+    #     employee_location,
+    #     employee_mail_groups,
+    #     employee_jira_groups,
+    #     employee_pacs_id
+    # )
+    #
+    # token_location = dicts.domain_props[employee.domain]['token']
+    # delegated_user = dicts.domain_props[employee.domain]['user']
 
     # создаем объект для авторизации
     # service = Google.get_service(key_file_location=token_location, delegated_user=delegated_user)
@@ -266,14 +225,33 @@ def main():
     # # get_all_groups()
 
     # Запрашиваю количество лицензий
-    for domain in dicts.domain_props.keys():
+    for domain in dicts.domain_attributes.keys():
         get_licenses = Google.get_license_count(domain)
         print('Занятых лицензий на домене %s' % domain + ': ', get_licenses)
 
+    # пишем в Sheets
+    sheet_id = '1BBFVl6QFvRrkSRyPTnmtjWlfhkXwBbAZ32_Zgvi0sBM'
+    append_range = 'A1:A2'
+    valueInputOption = 'RAW'
+    sheets = GoogleSheets
+    try:
+        sheet_service = sheets.get_service(sheets)
+        sheet = sheet_service.spreadsheets()
+        request_body = {
+            "range": "%s" % append_range,
+            "majorDimension": "COLUMNS",
+            "values": [
+                ['Tochkak.ru',
+                'vigerin@tochkak.ru']
+            ]
+        }
+        result = sheet.values().append(spreadsheetId=sheet_id,
+                                       range=append_range,
+                                       body=request_body,
+                                       valueInputOption=valueInputOption).execute()
 
-
-
-
+    except HttpError as err:
+        logging.error('Ошибка при работе с таблицами', err)
 
 
 if __name__ == '__main__':
