@@ -1,2 +1,2 @@
 # automate-it
-Automation of IT department. Managing users of multiple heterogeneous systems in one interface
+Automation of mail reports generating across all domains. List of users, group, licenses
