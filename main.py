@@ -1,3 +1,5 @@
+import os.path
+
 from googleapiclient.errors import HttpError
 from unidecode import unidecode
 import requests
@@ -101,16 +103,16 @@ class Google:
     # возращает список групп
     @staticmethod
     def get_groups(domain):
-        token_path = dicts.domain_attributes[domain]['token']
-        delegated_user = dicts.domain_attributes[domain]['user']
+        token_path = dicts.domain_props[domain]['token']
+        delegated_user = dicts.domain_props[domain]['user']
         service = Google.get_service(key_file_location=token_path, delegated_user=delegated_user)
         results = service.groups().list(domain=domain).execute()
         return results
 
     @staticmethod
     def get_group_members(domain, group):
-        token_path = dicts.domain_attributes[domain]['token']
-        delegated_user = dicts.domain_attributes[domain]['user']
+        token_path = dicts.domain_props[domain]['token']
+        delegated_user = dicts.domain_props[domain]['user']
         service = Google.get_service(key_file_location=token_path, delegated_user=delegated_user)
         results = service.members().list(groupKey=group).execute()
         return results
@@ -121,13 +123,22 @@ class Google:
         scopes = ['https://www.googleapis.com/auth/apps.licensing']
         api_name = 'licensing'
         api_version = 'v1'
-        token_path = dicts.domain_attributes[domain]['token']
-        delegated_user = dicts.domain_attributes[domain]['user']
-        credentials = ServiceAccountCredentials.from_json_keyfile_name(token_path, scopes)
-        delegated_credentials = credentials.create_delegated(delegated_user)
-        service = build(api_name, api_version, credentials=delegated_credentials)
-        results = service.licenseAssignments().listForProduct(productId='Google-Apps', customerId=domain).execute()
-        return len(results.get('items'))
+        token_path = dicts.domain_props[domain]['token']
+        if os.path.exists(token_path):
+            delegated_user = dicts.domain_props[domain]['user']
+            credentials = ServiceAccountCredentials.from_json_keyfile_name(token_path, scopes)
+            delegated_credentials = credentials.create_delegated(delegated_user)
+            service = build(api_name, api_version, credentials=delegated_credentials)
+            results = service.licenseAssignments().listForProduct(productId='Google-Apps', customerId=domain).execute()
+            return len(results.get('items'))
+
+    @staticmethod
+    def get_users(service_obj, domain_str) -> list():
+        users_json = service_obj.users().list(domain=domain_str).execute()
+        user_list = []
+        for user in users_json['users']:
+            user_list.append([user['name']['fullName'], user['primaryEmail']])
+        return user_list
 
 
 class GoogleSheets:
@@ -153,7 +164,7 @@ class GoogleSheets:
 
 
 def get_all_groups():
-    for domain in dicts.domain_attributes.keys():
+    for domain in dicts.domain_props.keys():
         equal_amount = len(str('Домен %s' % domain))
         print('=' * equal_amount)
         print('Домен %s' % domain)
@@ -173,83 +184,84 @@ def get_all_groups():
                     print('       -' + 'пустая группа')
 
 
-def main():
-    # # Задаем данные сотрудника
-    # employee_name = 'Уатомат'
-    # employee_surname = 'ЫТ'
-    # employee_domain = 'tochkak.ru'
-    # employee_position = 'sysadmin'
-    # employee_location = 'S2'
-    # employee_pacs_id = '12 345678'
-    # employee_mail_groups = dicts.mail_groups.get(employee_position)
-    # employee_jira_groups = dicts.jira_groups_dict.get(employee_position)
-    #
-    # # создаем объект для сотрудника
-    # employee = Employee(
-    #     employee_name,
-    #     employee_surname,
-    #     employee_domain,
-    #     employee_position,
-    #     employee_location,
-    #     employee_mail_groups,
-    #     employee_jira_groups,
-    #     employee_pacs_id
-    # )
-    #
-    # token_location = dicts.domain_props[employee.domain]['token']
-    # delegated_user = dicts.domain_props[employee.domain]['user']
-
-    # создаем объект для авторизации
-    # service = Google.get_service(key_file_location=token_location, delegated_user=delegated_user)
-    #
-    # # создаем пользователя Google
-    # create_gmail = Google.create_user(employee=employee, service=service)
-    # if create_gmail is True:
-    #     print('Создана почта %s' % employee.mail)
-    # else:
-    #     print('Почта не создана. Ошибка:' + ' ', create_gmail)
-    # # добавляем в группу, если есть в словаре mail_groups
-    # for group in employee.mail_groups:
-    #     add_to_group = Google.add_to_group(employee, service, group)
-    #     if len(add_to_group) == 1 and isinstance(add_to_group[0], list):
-    #         print('Почта %s' % employee.mail + ' ' + 'добавлена в группы %s' % add_to_group)
-    #     elif len(add_to_group) > 1 and add_to_group[2]:
-    #         print('Группа %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[2])
-    #     elif len(add_to_group) > 1:
-    #         print('Почта не добавлена в группу %s' % add_to_group[1] + ' ' + 'Ошибка:' + ' ', add_to_group[0])
-    #
-    # # создаем пользователя в Jira
-    # # new_jira_user = Jira.create(new_employee)
-    #
-    # # Выводим список групп и их членов
-    # # get_all_groups()
-
-    # Запрашиваю количество лицензий
-    for domain in dicts.domain_attributes.keys():
-        get_licenses = Google.get_license_count(domain)
-        print('Занятых лицензий на домене %s' % domain + ': ', get_licenses)
-
-    # пишем в Sheets
-    sheet_id = '1BBFVl6QFvRrkSRyPTnmtjWlfhkXwBbAZ32_Zgvi0sBM'
-    append_range = 'A1:A2'
-    valueInputOption = 'RAW'
-    sheets = GoogleSheets
-    try:
-        sheet_service = sheets.get_service(sheets)
-        sheet = sheet_service.spreadsheets()
-        request_body = {
-            "range": "%s" % append_range,
-            "majorDimension": "COLUMNS",
+def put_captions(service, sheet_id, valueInputOption):
+    """Пишет заголовки в начало таблицы"""
+    count = 1
+    for domain in dicts.domain_props:
+        caption_range = 'Users!R1C%s' % count
+        caption_request_body = {
+            "range": "%s" % caption_range,
+            "majorDimension": "ROWS",
             "values": [
-                ['Tochkak.ru',
-                'vigerin@tochkak.ru']
+                ['%s' % domain]
             ]
+        }
+        count += 3
+        caption_create_result = service.values().append(spreadsheetId=sheet_id,
+                                                      range=caption_range,
+                                                      body=caption_request_body,
+                                                      valueInputOption=valueInputOption).execute()
+
+
+def put_licenses(service, sheet_id, valueInputOption):
+    """Пишет сколько занято лицензий в начало таблицы"""
+    count = 1
+    for domain in dicts.domain_props:
+        licenses = Google.get_license_count(domain)
+        caption_range = 'Users!R1C%s' % count
+        caption_request_body = {
+            "range": "%s" % caption_range,
+            "majorDimension": "ROWS",
+            "values": [
+                ['Занятых лицензий: %s' % licenses]
+            ]
+        }
+        count += 3
+        caption_create_result = service.values().append(spreadsheetId=sheet_id,
+                                                      range=caption_range,
+                                                      body=caption_request_body,
+                                                      valueInputOption=valueInputOption).execute()
+
+
+def main():
+    # собираем пользователей по всем доменам
+    user_dict = {}
+    for domain in dicts.domain_props:
+        try:
+            if os.path.exists(dicts.domain_props[domain]['token']):
+                service = Google.get_service(key_file_location=dicts.domain_props[domain]['token'], delegated_user=dicts.domain_props[domain]['user'])
+                user_dict[domain] = Google.get_users(service, domain)
+        except HttpError as err:
+            logging.error('Ошибка в запросе к Mail', err)
+
+    # готовимся писать в Sheets
+    sheets = GoogleSheets()
+    sheet_id = '1BBFVl6QFvRrkSRyPTnmtjWlfhkXwBbAZ32_Zgvi0sBM'
+    tabs_range_list = ['Users!A1:Z1000', 'Groups!A1:Z1000']
+    valueInputOption = 'RAW'
+    try:
+        sheet_service = sheets.get_service()
+        sheet = sheet_service.spreadsheets()
+        # Получаем диапазон заполненных ячеек
+        for tab in tabs_range_list:
+            # очищаем таблицы по списку
+            clear = sheet.values().clear(spreadsheetId=sheet_id,
+                                        range=tab).execute()
+        # Добавляем заголовки
+        put_captions(sheet, sheet_id, valueInputOption)
+        # добавляем количество лицензий
+        put_licenses(sheet, sheet_id, valueInputOption)
+        # определяем область для записи
+        append_range = 'Users!A1:B%s' % str(user_dict.__len__())
+        request_body_caption = {
+            "range": "%s" % append_range,
+            "majorDimension": "ROWS",
+            "values": user_dict
         }
         result = sheet.values().append(spreadsheetId=sheet_id,
                                        range=append_range,
-                                       body=request_body,
+                                       body=request_body_caption,
                                        valueInputOption=valueInputOption).execute()
-
     except HttpError as err:
         logging.error('Ошибка при работе с таблицами', err)
 
