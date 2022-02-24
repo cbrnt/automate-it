@@ -52,7 +52,7 @@ domain_props = {
         'user': 'admin@dcp24.tech'
     },
     'svoe-nebo.ru': {
-        'token': 'keys/svoe-nebo_token.json',
+        'token': 'keys/svoe_nebo_token.json',
         'user': 'admin@svoe-nebo.ru'
     }
 }

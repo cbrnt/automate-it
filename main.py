@@ -162,7 +162,6 @@ class GoogleSheets:
         return service
 
 
-
 def get_all_groups():
     for domain in dicts.domain_props.keys():
         equal_amount = len(str('Домен %s' % domain))
@@ -198,9 +197,9 @@ def put_captions(service, sheet_id, valueInputOption):
         }
         count += 3
         caption_create_result = service.values().append(spreadsheetId=sheet_id,
-                                                      range=caption_range,
-                                                      body=caption_request_body,
-                                                      valueInputOption=valueInputOption).execute()
+                                                        range=caption_range,
+                                                        body=caption_request_body,
+                                                        valueInputOption=valueInputOption).execute()
 
 
 def put_licenses(service, sheet_id, valueInputOption):
@@ -218,9 +217,9 @@ def put_licenses(service, sheet_id, valueInputOption):
         }
         count += 3
         caption_create_result = service.values().append(spreadsheetId=sheet_id,
-                                                      range=caption_range,
-                                                      body=caption_request_body,
-                                                      valueInputOption=valueInputOption).execute()
+                                                        range=caption_range,
+                                                        body=caption_request_body,
+                                                        valueInputOption=valueInputOption).execute()
 
 
 def main():
@@ -229,7 +228,8 @@ def main():
     for domain in dicts.domain_props:
         try:
             if os.path.exists(dicts.domain_props[domain]['token']):
-                service = Google.get_service(key_file_location=dicts.domain_props[domain]['token'], delegated_user=dicts.domain_props[domain]['user'])
+                service = Google.get_service(key_file_location=dicts.domain_props[domain]['token'],
+                                             delegated_user=dicts.domain_props[domain]['user'])
                 user_dict[domain] = Google.get_users(service, domain)
         except HttpError as err:
             logging.error('Ошибка в запросе к Mail', err)
@@ -246,24 +246,38 @@ def main():
         for tab in tabs_range_list:
             # очищаем таблицы по списку
             clear = sheet.values().clear(spreadsheetId=sheet_id,
-                                        range=tab).execute()
+                                         range=tab).execute()
         # Добавляем заголовки
         put_captions(sheet, sheet_id, valueInputOption)
         # добавляем количество лицензий
         put_licenses(sheet, sheet_id, valueInputOption)
-        # определяем область для записи
-        append_range = 'Users!A1:B%s' % str(user_dict.__len__())
-        request_body_caption = {
-            "range": "%s" % append_range,
-            "majorDimension": "ROWS",
-            "values": user_dict
+        # Пишем пользователей со всех доменов
+        count = 1
+        append_range_list = {
+            'tochkak.ru': 'Users!R1C1:R100C1',
+            'dcp24.ru': 'Users!R1C4:R100C5',
+            'kinoplan.ru': 'Users!R1C6:R100C8',
+            'dcp24.tech': 'Users!R1C9:R100C11',
+            'svoe-nebo.ru': 'Users!R1C13:R100C15'
         }
-        result = sheet.values().append(spreadsheetId=sheet_id,
-                                       range=append_range,
-                                       body=request_body_caption,
-                                       valueInputOption=valueInputOption).execute()
+        for domain_user_dict in user_dict:
+            append_range = append_range_list[domain_user_dict]
+            request_body_caption = {
+                "range": append_range,
+                "majorDimension": "ROWS",
+                "values": user_dict[domain_user_dict]
+            }
+            result = sheet.values().append(
+                spreadsheetId=sheet_id,
+                range=append_range,
+                body=request_body_caption,
+                valueInputOption=valueInputOption
+            ).execute()
+            count += 2
     except HttpError as err:
         logging.error('Ошибка при работе с таблицами', err)
+
+        # собираем группы
 
 
 if __name__ == '__main__':
