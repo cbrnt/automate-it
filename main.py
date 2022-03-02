@@ -11,6 +11,7 @@ import string
 import random
 import logging
 import argparse
+import time
 
 DEBUG = False
 
@@ -144,12 +145,8 @@ class Google:
 class GoogleSheets:
     # If modifying these scopes, delete the file token.json.
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
     # Токен только tochkak.ru, так как лазить буду только туда
     token_file = 'keys/tochkak_token.json'
-
-    # The ID and range of a sample spreadsheet.
-
     delegated_user = 'admin@tochkak.ru'
 
     def get_service(self):
@@ -160,6 +157,27 @@ class GoogleSheets:
         except HttpError as err:
             logging.error('Ошибка при получении доступа к Sheets', err)
         return service
+
+    @staticmethod
+    def append_values(service, append_range, values, sheet_id, dimension, tab, valueInputOption='RAW'):
+        if isinstance(values, (str,)):
+            values = [values]
+        gap_append_range = tab + '!' + 'R' + str(append_range[f'{tab}!'][0][0]) + 'C' + str(append_range[f'{tab}!'][0][1]) + ':' \
+            'R' + str(append_range[f'{tab}!'][1][0]) + 'C' + str(append_range[f'{tab}!'][1][1])
+        request_body = {
+            "range": gap_append_range,
+            "majorDimension": dimension,
+            "values": [
+                values
+            ]
+        }
+        service.values().append(
+            spreadsheetId=sheet_id,
+            range=gap_append_range,
+            body=request_body,
+            valueInputOption=valueInputOption
+        ).execute()
+
 
 
 def get_all_groups():
@@ -183,7 +201,7 @@ def get_all_groups():
                     print('       -' + 'пустая группа')
 
 
-def put_captions(service, sheet_id, valueInputOption, tab: str):
+def put_captions(service, sheet_id, tab: str, valueInputOption='RAW'):
     """Пишет заголовки в начало таблицы"""
     count = 1
     for domain in dicts.domain_props:
@@ -235,6 +253,7 @@ def main():
             logging.error('Ошибка в запросе к Mail', err)
 
     # готовимся писать в Sheets
+    # пишем пользователей в Users
     sheets = GoogleSheets()
     sheet_id = '1BBFVl6QFvRrkSRyPTnmtjWlfhkXwBbAZ32_Zgvi0sBM'
     tabs_range_list = ['Users!A1:Z1000', 'Groups!A1:Z1000']
@@ -247,7 +266,7 @@ def main():
             clear = sheet.values().clear(spreadsheetId=sheet_id,
                                          range=tab).execute()
         # Добавляем заголовки
-        put_captions(sheet, sheet_id, valueInputOption, tab='Users')
+        put_captions(sheet, sheet_id, tab='Users')
         # добавляем количество лицензий
         put_licenses(sheet, sheet_id, valueInputOption)
         # Пишем пользователей со всех доменов
@@ -289,48 +308,64 @@ def main():
     users_from_groups = {}
     for domain in dicts.domain_props:
         for group in groups_dict[domain].get('groups'):
-            print(group)
             if not users_from_groups.get(domain):
                 users_from_groups[domain] = {}
             api_answer = Google.get_group_members(domain=domain, group=group['email'])
             try:
                 for member in api_answer.get('members'):
-                    print(member)
                     if not users_from_groups[domain].get(group['email']):
                         users_from_groups[domain][group['email']] = []
                     users_from_groups[domain][group['email']].append(member.get('email'))
             except TypeError as e:
                 print('Ошибка при извлечении членов группы: ', str(e))
 
-    # пишем в Sheets
-    tabs_range_list = ['Groups!A1:Z1000', 'Groups!A1:Z1000']
-    valueInputOption = 'RAW'
+    # пишем группы в Groups
     try:
-        # Добавляем заголовки
-        put_captions(sheet, sheet_id, valueInputOption, tab='Groups')
+        # Добавляем заголовки для групп
+        put_captions(sheet, sheet_id, tab='Groups')
 
         for tab in tabs_range_list:
             count = 1
             append_range_list_groups = {
-                'tochkak.ru': 'Groups!R1C1:R100C1',
-                'dcp24.ru': 'Groups!R1C4:R100C5',
-                'kinoplan.ru': 'Groups!R1C6:R100C8',
-                'dcp24.tech': 'Groups!R1C9:R100C11',
-                'svoe-nebo.ru': 'Groups!R1C13:R100C15'
-            }
-            # пишем название группы и под ней членов
-            for domain_users_groups in users_from_groups:
-                append_range = append_range_list_groups[domain_users_groups]
-                request_body_caption = {
-                    "range": append_range,
-                    "majorDimension": "ROWS",
-                    "values": users_from_groups[domain_users_groups]
+                'tochkak.ru': {
+                    'Groups!': ((1, 1), (1, 1))
+                },
+                'dcp24.ru': {
+                    'Groups!': ((2, 4), (100, 4))
+                },
+                'kinoplan.ru': {
+                    'Groups!': ((2, 7), (100, 7))
+                },
+                'dcp24.tech': {
+                    'Groups!': ((2, 10), (100, 10))
+                },
+                'svoe-nebo.ru': {
+                    'Groups!': ((2, 13), (100, 13))
                 }
-
+            }
+            # пишем название группы
+            for dmn in users_from_groups:
+                append_range = append_range_list_groups[dmn]
+                for group in users_from_groups.get(dmn).keys():
+                    last_group_size = users_from_groups[dmn][group].__len__()
+                    sheets.append_values(service=sheet,
+                                         append_range=append_range,
+                                         values=group,
+                                         sheet_id=sheet_id,
+                                         dimension='COLUMNS',
+                                         tab='Groups')
+                    sheets.append_values(service=sheet,
+                                         append_range=append_range,
+                                         values=users_from_groups[dmn][group],
+                                         sheet_id=sheet_id,
+                                         dimension='COLUMNS',
+                                         tab='Groups')
+                    time.sleep(3)
 
     except HttpError as err:
         logging.error('Ошибка при работе с таблицами', err)
     print
+
 
 if __name__ == '__main__':
     main()
